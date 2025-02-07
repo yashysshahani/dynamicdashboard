@@ -8,9 +8,22 @@ import numpy as np
 import base64
 import io
 
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.FLATLY])
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.MINTY])
 
 dataframe = pd.DataFrame()
+
+green_palette = [
+    '#2ecc71',
+    '#27ae60', 
+    '#1abc9c', 
+    '#16a085', 
+    '#66bb6a', 
+    '#43a047', 
+    '#4caf50', 
+    '#388e3c', 
+    '#2e7d32', 
+    '#1b5e20' 
+]
 
 def get_dtype(series: pd.Series) -> str:
     if pd.api.types.is_numeric_dtype(series):
@@ -48,91 +61,138 @@ def guess_chart_type(x_dtype: str, y_dtypes: list[str], multiple_y: bool) -> str
 
 app.layout = dbc.Container([
     dbc.Row([
-        dbc.Col(html.H2("Dashboard", className="text-center text-primary mb-4"), width=12)
+        dbc.Col(
+            html.H2("Data Dashboard", className="text-center text-primary mb-4"),
+            width=12
+        )
     ]),
     dbc.Row([
-        dbc.Col([
-            dcc.Upload(
-                id='upload-data',
-                children=html.Div(['Drag and Drop or ', html.A('Select a File')]),
-                style={
-                    'width': '100%', 'height': '60px', 'lineHeight': '60px',
-                    'borderWidth': '1px', 'borderStyle': 'dashed',
-                    'borderRadius': '5px', 'textAlign': 'center'
-                }
-            ),
-            html.Div(id='file-info', className="mt-3")
-        ], width=12)
+        dbc.Col(
+            dbc.Card([
+                dbc.CardHeader("Upload & Filter Data"),
+                dbc.CardBody([
+                    dcc.Upload(
+                        id='upload-data',
+                        children=html.Div(['Drag and Drop or ', html.A('Select a File')]),
+                        style={
+                            'width': '100%', 'height': '60px', 'lineHeight': '60px',
+                            'borderWidth': '1px', 'borderStyle': 'dashed',
+                            'borderRadius': '5px', 'textAlign': 'center'
+                        }
+                    ),
+                    html.Div(id='file-info', className="mt-3"),
+                    dbc.Row([
+                        dbc.Col([
+                            dbc.Label("Filter Column"),
+                            dcc.Dropdown(id="filter-column-dropdown", placeholder="Select column")
+                        ], width=4),
+                        dbc.Col([
+                            dbc.Label("Filter Value"),
+                            dcc.Input(id='filter-value', type='text', placeholder="Value or substring", style={'width': '100%'})
+                        ], width=4),
+                        dbc.Col([
+                            dbc.Button("Analyze", id='filter-button', color='primary', className='mt-4')
+                        ], width=4)
+                    ], className="mt-3")
+                ])
+            ]),
+            width=12
+        )
     ], className="mb-4"),
 
+    # Data stores for raw and filtered data
     dcc.Store(id='uploaded-data'),
-
     dcc.Store(id='filtered-data'),
-
+    
     dbc.Row([
-        dbc.Col([
-            dbc.Label("Filter Column"),
-            dcc.Dropdown(id="filter-column-dropdown", placeholder='Select column')
-        ], width=3),
-        dbc.Col([
-            dbc.Label("Filter Value"),
-            dcc.Input(id='filter-value', type='text', placeholder='Value or substring', style={'width': '100%'})
-        ], width=3),
-        dbc.Col([
-            dbc.Button("Apply Filter", id='filter-button', color='primary', className='mt-4')
-        ], width=2)
-    ], className='mb-4'),
-
-    dbc.Row([
-        dbc.Col([
-            html.H5("Summary of Data", className='text-info mb-3'),
-            html.Div(id='data-summary')
-        ], width=12)
-    ], className='mb-4'),
-
-    dbc.Row([
-        dbc.Col([
-            dcc.Dropdown(id='attribute-dropdown', placeholder='Select an Attribute')
-        ], width=4),
-        dbc.Col([
-            dcc.Dropdown(id='x-axis-dropdown', placeholder='Select X-Axis')
-        ], width=4),
-        dbc.Col([
-            dcc.Dropdown(id='y-axis-dropdown', placeholder='Select Y-Axis (multi)', multi=True)
-        ], width=4),
+        dbc.Col(
+            dbc.Card([
+                dbc.CardHeader("Data Summary"),
+                dbc.CardBody(html.Div(id='data-summary'))
+            ]),
+            width=12
+        )
     ], className="mb-4"),
-
+    
     dbc.Row([
-        dbc.Col([
-            dcc.Dropdown(
-                id='chart-type-dropdown',
-                options=[
-                    {'label': 'Auto (default)', 'value': ''},
-                    {'label': 'Scatter', 'value': 'scatter'},
-                    {'label': 'Line', 'value': 'line'},
-                    {'label': 'Bar', 'value': 'bar'},
-                    {'label': 'Box', 'value': 'box'},
-                    {'label': 'Violin', 'value': 'violin'},
-                    {'label': 'Histogram', 'value': 'histogram'},
-                    {'label': 'Heatmap (crosstab)', 'value': 'heatmap'}
-                ],
-                value='',
-                placeholder='Select Chart Type'
-            )
-        ], width=6),
-        dbc.Col([
-            dcc.Checklist(
-                id='trendline-toggle',
-                options=[{'label': 'Show Trend Line', 'value': 'trend'}],
-                value=[],
-                className="mt-2"
-            )
-        ], width=6)
-    ], className="mb-4"),
-
-    dbc.Row([
-        dbc.Col([dcc.Graph(id='data-chart')], width=6),
-        dbc.Col([dcc.Graph(id='custom-chart')], width=6)
+        dbc.Col(
+            dbc.Card([
+                dbc.CardHeader("Distribution Chart"),
+                dbc.CardBody([
+                    dbc.Row([
+                        dbc.Col([
+                            dbc.Label("Select Attribute"),
+                            dcc.Dropdown(id='attribute-dropdown', placeholder="Select an Attribute")
+                        ], width=6),
+                        dbc.Col([
+                            dbc.Label("Chart Type"),
+                            dcc.Dropdown(
+                                id='attribute-chart-type',
+                                options=[
+                                    {'label': 'Auto (default)', 'value': ''},
+                                    {'label': 'Histogram', 'value': 'histogram'},
+                                    {'label': 'Pie Chart', 'value': 'pie'},
+                                    {'label': 'Treemap', 'value': 'treemap'},
+                                    {'label': 'Summary Statistics', 'value': 'summary'}
+                                ],
+                                value='',
+                                placeholder="Select Chart Type"
+                            )
+                        ], width=6)
+                    ], className="mb-3"),
+                    dcc.Graph(id='data-chart')
+                ])
+            ]),
+            width=6
+        ),
+        dbc.Col(
+            dbc.Card([
+                dbc.CardHeader("Custom Chart"),
+                dbc.CardBody([
+                    dbc.Row([
+                        dbc.Col([
+                            dbc.Label("X-Axis"),
+                            dcc.Dropdown(id='x-axis-dropdown', placeholder="Select X-Axis")
+                        ], width=6),
+                        dbc.Col([
+                            dbc.Label("Y-Axis"),
+                            dcc.Dropdown(id='y-axis-dropdown', placeholder="Select Y-Axis (multi)", multi=True)
+                        ], width=6)
+                    ], className="mb-3"),
+                    dbc.Row([
+                        dbc.Col([
+                            dbc.Label("Chart Type"),
+                            dcc.Dropdown(
+                                id='chart-type-dropdown',
+                                options=[
+                                    {'label': 'Auto (default)', 'value': ''},
+                                    {'label': 'Scatter', 'value': 'scatter'},
+                                    {'label': 'Line', 'value': 'line'},
+                                    {'label': 'Bar', 'value': 'bar'},
+                                    {'label': 'Box', 'value': 'box'},
+                                    {'label': 'Violin', 'value': 'violin'},
+                                    {'label': 'Histogram', 'value': 'histogram'},
+                                    {'label': 'Heatmap (crosstab)', 'value': 'heatmap'}
+                                ],
+                                value='',
+                                placeholder="Select Chart Type"
+                            )
+                        ], width=8),
+                        dbc.Col([
+                            dbc.Label("Trendline"),
+                            dcc.Checklist(
+                                id='trendline-toggle',
+                                options=[{'label': 'Show Trend Line', 'value': 'trend'}],
+                                value=[],
+                                inline=True
+                            )
+                        ], width=4)
+                    ]),
+                    dcc.Graph(id='custom-chart')
+                ])
+            ]),
+            width=6
+        )
     ])
 ], fluid=True)
 
@@ -225,29 +285,89 @@ def update_summary(filtered_data):
         data=desc.to_dict('records'),
         style_table={'overflowX': 'auto'},
         style_cell={'textAlign': 'left', 'padding': '5px'},
-        style_header={'backgroundColor': '#f8f9fa', 'fontWeight': 'bold'},
+        style_header={
+            'backgroundColor': '#2ecc71', 
+            'fontWeight': 'bold',
+            'color': 'white'
+        },
+        style_data={
+            'backgroundColor': 'white',
+            'color': '#2e7d32'
+        },
+        style_data_conditional=[
+            {
+                'if': {'row_index': 'odd'},
+                'backgroundColor': '#e8f5e9' 
+            }
+        ],
         page_size=10
     )
 
 @app.callback(
     Output('data-chart', 'figure'),
     Input('attribute-dropdown', 'value'),
-    Input('filtered-data', 'data')
+    Input('filtered-data', 'data'),
+    Input('attribute-chart-type', 'value')
 )
-def data_distributions(value, filtered_data):
+def data_distributions(value, filtered_data, chart_type):
     if not filtered_data:
         return go.Figure().update_layout(title="No data to display")
+    
     df = pd.DataFrame(filtered_data)
     if not value or value not in df.columns:
         return go.Figure().update_layout(title="Please select an attribute")
+    
     data = df[value].dropna()
     if data.empty:
         return go.Figure().update_layout(title=f"No data in {value} after filter")
+    
     if pd.api.types.is_numeric_dtype(data):
-        fig = px.histogram(df, x=value, title=f"Distribution of {value}")
+        if data.nunique() == len(data) and (chart_type == '' or chart_type is None):
+            chart_type = 'summary'
+    elif (pd.api.types.is_categorical_dtype(data) or (data.dtype == object)) and chart_type == '':
+        chart_type = 'pie'
     else:
-        fig = px.pie(df, names=value, title=f"Distribution of {value}")
-    fig.update_layout(colorway=px.colors.qualitative.Plotly)
+        if data.nunique() > 20 and (chart_type == '' or chart_type is None):
+            chart_type = 'summary'
+
+    
+    if chart_type == 'pie':
+        fig = px.pie(df, names=value, title=f"Distribution of {value}",
+                     color_discrete_sequence=green_palette)
+    elif chart_type == 'treemap':
+        fig = px.treemap(df, path=[value], title=f"Treemap of {value}",
+                         color_discrete_sequence=green_palette)
+    elif chart_type == 'summary':
+        counts = data.value_counts().reset_index()
+        counts.columns = [value, 'Count']
+        fig = go.Figure(data=[go.Table(
+            header=dict(
+                values=list(counts.columns),
+                fill_color='#2ecc71',
+                font=dict(color='white', size=12),
+                align='center'
+            ),
+            cells=dict(
+                values=[counts[value], counts['Count']],
+                fill_color='white',
+                font=dict(color='#2e7d32', size=11),
+                align='left'
+            )
+        )])
+        fig.update_layout(title=f"Summary Statistics for {value}",
+                          paper_bgcolor='white', plot_bgcolor='white')
+    else:
+        fig = px.histogram(df, x=value, title=f"Distribution of {value}",
+                           color_discrete_sequence=green_palette)
+    
+    fig.update_layout(
+        colorway=green_palette,
+        xaxis=dict(showgrid=False, zeroline=False),
+        yaxis=dict(showgrid=False, zeroline=False),
+        plot_bgcolor='white',
+        paper_bgcolor='white'
+    )
+
     return fig
 
 @app.callback(
@@ -272,16 +392,19 @@ def custom_chart(x, y_list, chart_type, trendline_toggle, filtered_data):
     y_dtypes = [get_dtype(df[y]) for y in y_list]
     if not chart_type:
         chart_type = guess_chart_type(x_dtype, y_dtypes, multiple_y=(len(y_list) > 1))
+    
     if chart_type == 'heatmap':
         if x_dtype == 'categorical' and all(d == 'categorical' for d in y_dtypes) and len(y_list) == 1:
             crosstab = pd.crosstab(df[x], df[y_list[0]])
-            fig = px.imshow(crosstab, text_auto=True, aspect='auto')
+            fig = px.imshow(crosstab, text_auto=True, aspect='auto',
+                            color_continuous_scale=green_palette)
             fig.update_layout(title=f"Heatmap of {x} vs. {y_list[0]}")
             return fig
         else:
             return go.Figure().update_layout(
                 title="Heatmap requires a single categorical Y and categorical X"
             )
+    
     fig = go.Figure()
     show_trendline = ('trend' in trendline_toggle)
     for y in y_list:
@@ -324,7 +447,11 @@ def custom_chart(x, y_list, chart_type, trendline_toggle, filtered_data):
         xaxis_title=x,
         yaxis_title=", ".join(y_list),
         barmode="group",
-        colorway=px.colors.qualitative.Plotly
+        colorway=green_palette,
+        xaxis=dict(showgrid=False, zeroline=False),
+        yaxis=dict(showgrid=False, zeroline=False),
+        plot_bgcolor='white',
+        paper_bgcolor='white'
     )
     return fig
 
